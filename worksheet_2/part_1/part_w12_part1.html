@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Worksheet 12 - Part 1</title>
+    <script type="text/javascript" src="MV.js"></script>
+    <script type="text/javascript" src="script.js"></script>
+    <script id="wgsl" type="x-shader" src="shaders_w12_part1.wgsl"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+
+        table.layout td {
+            vertical-align: top;
+            padding: 0 20px;
+        }
+
+        table.ui td {
+            padding: 6px 4px;
+        }
+
+        input[type="range"] {
+            width: 180px;
+        }
+    </style>
+</head>
+
+<body>
+    <table class="layout">
+        <tr>
+            <td>
+                <canvas id="my-canvas" width="512" height="512">
+                    Please use a browser that supports HTML5 canvas.
+                </canvas>
+            </td>
+            <td>
+                <table class="ui">
+                    <tr>
+                        <td><button id="toggle-btn">Stop</button></td>
+                    </tr>
+                    <tr>
+                        <td><button id="step-btn">Step (1/60 s)</button></td>
+                    </tr>
+                    <tr>
+                        <td><label for="velocity-slider">Jump velocity: <span id="velocity-value">1.5</span></label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="velocity-slider" min="0.5" max="3.0" step="0.1" value="1.5"></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
