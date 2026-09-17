@@ -1,18 +1,15 @@
 "use strict";
 window.onload = function () { main(); }
 
-//helper
-const add_point = (array, point, size) => {
-    const offset = size / 2;
-    var point_coords = [vec2(point[0] - offset, point[1] - offset), vec2(point[0] + offset, point[1] - offset),
-    vec2(point[0] - offset, point[1] + offset), vec2(point[0] - offset, point[1] + offset),
-    vec2(point[0] + offset, point[1] - offset), vec2(point[0] + offset, point[1] + offset)];
-    array.push.apply(array, point_coords);
-}
-
-const add_color = (array, color, count) => {
-    for (let i = 0; i < count; i++) {
-        array.push(color);
+const add_circle = (array, center, radius, segments) => {
+    for (let i = 0; i < segments; i++) {
+        const theta0 = (i / segments) * 2 * Math.PI;
+        const theta1 = ((i + 1) / segments) * 2 * Math.PI;
+        const p0 = vec2(center[0] + radius * Math.cos(theta0), center[1] + radius * Math.sin(theta0));
+        const p1 = vec2(center[0] + radius * Math.cos(theta1), center[1] + radius * Math.sin(theta1));
+        array.push(center);
+        array.push(p0);
+        array.push(p1);
     }
 }
 
@@ -39,20 +36,13 @@ async function main() {
         code: wgslcode
     });
 
+    const radius = 0.5;
+    const segments = 64;
+    const baseY = -0.7;
+
     // Create a buffer with the positions of the triangle's 3 vertices
     var positions = [];
-    positions.push(vec2(-0.5, -0.5));
-    positions.push(vec2(0.5, -0.5));
-    positions.push(vec2(-0.5, 0.5));
-
-    positions.push(vec2(-0.5, 0.5));
-    positions.push(vec2(0.5, -0.5));
-    positions.push(vec2(0.5, 0.5));
-
-    const uniformBuffer = device.createBuffer({
-        size: 16,
-        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-    })
+    add_circle(positions, [0.0, baseY], radius, segments);
 
     const positionBufferLayout = {
         arrayStride: sizeof['vec2'],
@@ -68,6 +58,11 @@ async function main() {
         usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
     });
     device.queue.writeBuffer(positionBuffer, 0, flatten(positions));
+
+    const uniformBuffer = device.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    })
 
     const pipeline = device.createRenderPipeline({
         layout: 'auto',
@@ -91,12 +86,16 @@ async function main() {
         entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
     })
 
+    const amplitude = 0.6;
+    const speed = 2.0;
+
+
     const render = (timeMs) => {
-        const angle = timeMs / 1000;
+        const time = timeMs / 1000 * speed;
+        const offsetY = amplitude * Math.abs(Math.sin(time));
 
         // device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([Math.cos(angle), Math.sin(angle), 0, 0]));
-        device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([angle, 0, 0, 0]));
-
+        device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([offsetY, 0, 0, 0]));
         const encoder = device.createCommandEncoder();
         const pass = encoder.beginRenderPass({
             colorAttachments: [{
