@@ -1,0 +1,237 @@
+"use strict";
+window.onload = function () { main(); }
+
+const build_ball = (array, center, radius, segments) => {
+    for (let i = 0; i < segments; i++) {
+        const theta0 = (i / segments) * 2 * Math.PI;
+        const theta1 = ((i + 1) / segments) * 2 * Math.PI;
+        array.push(vec2(center[0], center[1]));
+        array.push(vec2(center[0] + radius * Math.cos(theta0), center[1] + radius * Math.sin(theta0)));
+        array.push(vec2(center[0] + radius * Math.cos(theta1), center[1] + radius * Math.sin(theta1)));
+    }
+}
+
+const build_ground = (array, x0, y0, x1, y1) => {
+    array.push(vec2(x0, y0));
+    array.push(vec2(x1, y0));
+    array.push(vec2(x0, y1));
+    array.push(vec2(x0, y1));
+    array.push(vec2(x1, y0));
+    array.push(vec2(x1, y1));
+}
+
+async function main() {
+
+    // Initialize WebGPU
+    const gpu = navigator.gpu;
+    const adapter = await gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+    const canvas = document.getElementById('my-canvas');
+    const context = canvas.getContext('webgpu');
+    const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+    context.configure({
+        device: device,
+        format: canvasFormat,
+    });
+
+    const wgslfile = document.getElementById('wgsl').src;
+    const wgslcode = await fetch(wgslfile, { cache: "reload" }).then(r => r.text());
+    const wgsl = device.createShaderModule({
+        code: wgslcode
+    });
+
+    // world
+    const radius = 0.15;
+    const floorY = -0.9;
+    const gravity = -2.5;   // clip-space units / s^2
+    const dt = 1 / 60;
+
+    let ballY = floorY + radius;
+    let ballVY = 0;
+    let running = true;
+
+    // squash/stretch state
+    let state = 'jumping'; // 'jumping' | 'squashing'
+    let squashElapsed = 0;
+    let scaleX = 1;
+    let scaleY = 1;
+
+    let jumpVelocity = parseFloat(document.getElementById('velocity-slider').value);
+    let stretchFactor = parseFloat(document.getElementById('stretch-slider').value);
+    let squashFactor = parseFloat(document.getElementById('squash-slider').value);
+    let squashDuration = parseFloat(document.getElementById('duration-slider').value);
+
+    // ---- Geometry ----
+    // Ball is built centered on the origin; the shader scales then translates it.
+    var ballPositions = [];
+    build_ball(ballPositions, [0.0, 0.0], radius, 64);
+
+    var floorPositions = [];
+    build_ground(floorPositions, -1.0, floorY - 0.03, 1.0, floorY);
+
+    const positionBufferLayout = {
+        arrayStride: sizeof['vec2'],
+        attributes: [{
+            format: 'float32x2',
+            offset: 0,
+            shaderLocation: 0,
+        }]
+    }
+
+    const ballBuffer = device.createBuffer({
+        size: flatten(ballPositions).byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(ballBuffer, 0, flatten(ballPositions));
+
+    const floorBuffer = device.createBuffer({
+        size: flatten(floorPositions).byteLength,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+    });
+    device.queue.writeBuffer(floorBuffer, 0, flatten(floorPositions));
+
+    const uniformBuffer = device.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+    });
+
+    // pipelines
+    const ballPipeline = device.createRenderPipeline({
+        layout: 'auto',
+        vertex: { module: wgsl, entryPoint: 'main_vs', buffers: [positionBufferLayout] },
+        fragment: { module: wgsl, entryPoint: 'main_fs', targets: [{ format: canvasFormat }] },
+        primitive: { topology: 'triangle-list' }
+    });
+
+    const floorPipeline = device.createRenderPipeline({
+        layout: 'auto',
+        vertex: { module: wgsl, entryPoint: 'floor_vs', buffers: [positionBufferLayout] },
+        fragment: { module: wgsl, entryPoint: 'floor_fs', targets: [{ format: canvasFormat }] },
+        primitive: { topology: 'triangle-list' }
+    });
+
+    const bindGroup = device.createBindGroup({
+        layout: ballPipeline.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
+    });
+
+    // physics + squash/stretch state machine
+    function physicsStep() {
+        if (state === 'jumping') {
+            ballVY += gravity * dt;
+            ballY += ballVY * dt;
+
+            const speed = Math.abs(ballVY);
+            scaleY = 1 + stretchFactor * speed;
+            scaleX = 1 / scaleY;
+
+            if (ballY <= floorY + radius) {
+                // Hit the floor: hand off to the squash animation instead of
+                // relaunching immediately.
+                state = 'squashing';
+                squashElapsed = 0;
+            }
+        } else { // 'squashing'
+            squashElapsed += dt;
+            const t = Math.min(squashElapsed / squashDuration, 1);
+            const s = squashFactor * Math.sin(Math.PI * t);
+            scaleY = 1 - s;
+            scaleX = 1 + s;
+            // Keep the ball's bottom edge pinned to the floor: since the
+            // shader scales about the origin and then adds ballY, the
+            // bottom of the mesh sits at ballY - radius*scaleY.
+            ballY = floorY + radius * scaleY;
+
+            if (squashElapsed >= squashDuration) {
+                // Squash animation concluded: reset and relaunch.
+                state = 'jumping';
+                scaleX = 1;
+                scaleY = 1;
+                ballY = floorY + radius;
+                ballVY = jumpVelocity;
+            }
+        }
+    }
+
+    // render
+    function render() {
+        device.queue.writeBuffer(uniformBuffer, 0, new Float32Array([ballY, scaleX, scaleY, 0]));
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginRenderPass({
+            colorAttachments: [{
+                view: context.getCurrentTexture().createView(),
+                loadOp: 'clear',
+                storeOp: 'store',
+                clearValue: { r: 0.3921, g: 0.5843, b: 0.9294, a: 1.0 },
+            }],
+        });
+
+        pass.setPipeline(floorPipeline);
+        pass.setVertexBuffer(0, floorBuffer);
+        pass.draw(floorPositions.length);
+
+        pass.setPipeline(ballPipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.setVertexBuffer(0, ballBuffer);
+        pass.draw(ballPositions.length);
+
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+    }
+
+    const loop = () => {
+        if (running) {
+            physicsStep();
+        }
+        render();
+        requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    // UI
+    const toggleBtn = document.getElementById('toggle-btn');
+    const stepBtn = document.getElementById('step-btn');
+    const slider = document.getElementById('velocity-slider');
+    const valueLabel = document.getElementById('velocity-value');
+    const stretchSlider = document.getElementById('stretch-slider');
+    const stretchValue = document.getElementById('stretch-value');
+    const squashSlider = document.getElementById('squash-slider');
+    const squashValue = document.getElementById('squash-value');
+    const durationSlider = document.getElementById('duration-slider');
+    const durationValue = document.getElementById('duration-value');
+
+    stepBtn.disabled = running;
+
+    toggleBtn.addEventListener('click', () => {
+        running = !running;
+        toggleBtn.textContent = running ? 'Stop' : 'Start';
+        stepBtn.disabled = running;
+    });
+
+    stepBtn.addEventListener('click', () => {
+        if (!running) {
+            physicsStep();
+        }
+    });
+
+    slider.addEventListener('input', () => {
+        jumpVelocity = parseFloat(slider.value);
+        valueLabel.textContent = jumpVelocity.toFixed(1);
+    });
+
+    stretchSlider.addEventListener('input', () => {
+        stretchFactor = parseFloat(stretchSlider.value);
+        stretchValue.textContent = stretchFactor.toFixed(2);
+    });
+
+    squashSlider.addEventListener('input', () => {
+        squashFactor = parseFloat(squashSlider.value);
+        squashValue.textContent = squashFactor.toFixed(2);
+    });
+
+    durationSlider.addEventListener('input', () => {
+        squashDuration = parseFloat(durationSlider.value);
+        durationValue.textContent = squashDuration.toFixed(2);
+    });
+}
