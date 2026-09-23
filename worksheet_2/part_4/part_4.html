@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Worksheet 12 - Part 4</title>
+    <script type="text/javascript" src="MV.js"></script>
+    <script type="text/javascript" src="script.js"></script>
+    <script id="wgsl" type="x-shader" src="part4.wgsl"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+        }
+
+        table.layout td {
+            vertical-align: top;
+            padding: 0 20px;
+        }
+
+        table.ui td {
+            padding: 6px 4px;
+        }
+
+        input[type="range"] {
+            width: 180px;
+        }
+    </style>
+</head>
+
+<body>
+    <table class="layout">
+        <tr>
+            <td>
+                <canvas id="my-canvas" width="512" height="512">
+                    Please use a browser that supports HTML5 canvas.
+                </canvas>
+            </td>
+            <td>
+                <table class="ui">
+                    <tr>
+                        <td><button id="toggle-btn">Stop</button></td>
+                    </tr>
+                    <tr>
+                        <td><button id="step-btn">Step (1/60 s)</button></td>
+                    </tr>
+                    <tr>
+                        <td><label for="velocity-slider">Jump velocity: <span id="velocity-value">1.5</span></label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="velocity-slider" min="0.5" max="3.0" step="0.1" value="1.5"></td>
+                    </tr>
+                    <tr>
+                        <td><label for="stretch-slider">Stretch factor: <span id="stretch-value">0.15</span></label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="stretch-slider" min="0" max="0.5" step="0.01" value="0.15"></td>
+                    </tr>
+                    <tr>
+                        <td><label for="stiffness-slider">Spring stiffness: <span
+                                    id="stiffness-value">200</span></label></td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="stiffness-slider" min="50" max="500" step="10" value="200"></td>
+                    </tr>
+                    <tr>
+                        <td><label for="damping-slider">Spring damping: <span id="damping-value">8</span></label>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="damping-slider" min="1" max="30" step="1" value="8"></td>
+                    </tr>
+                    <tr>
+                        <td><label for="flatness-slider">Flatness: <span id="flatness-value">0.8</span></label></td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="flatness-slider" min="0" max="2" step="0.1" value="0.8"></td>
+                    </tr>
+                    <tr>
+                        <td><label for="pause-slider">Flat pause (frames): <span id="pause-value">6</span></label></td>
+                    </tr>
+                    <tr>
+                        <td><input type="range" id="pause-slider" min="0" max="30" step="1" value="6"></td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
