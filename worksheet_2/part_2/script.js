@@ -51,7 +51,7 @@ async function main() {
     let running = true;
 
     // squash/stretch state
-    let state = 'jumping'; // 'jumping' | 'squashing'
+    let state = 'jumping'; // 'jumping' | 'squashing' TYPESCRIPT WOULD OH SO NICE
     let squashElapsed = 0;
     let scaleX = 1;
     let scaleY = 1;
@@ -61,8 +61,8 @@ async function main() {
     let squashFactor = parseFloat(document.getElementById('squash-slider').value);
     let squashDuration = parseFloat(document.getElementById('duration-slider').value);
 
-    // ---- Geometry ----
-    // Ball is built centered on the origin; the shader scales then translates it.
+    // geometry
+    // ball is built centered on the origin; the shader scales then translates it.
     var ballPositions = [];
     build_ball(ballPositions, [0.0, 0.0], radius, 64);
 
@@ -126,7 +126,7 @@ async function main() {
             scaleX = 1 / scaleY;
 
             if (ballY <= floorY + radius) {
-                // Hit the floor: hand off to the squash animation instead of
+                // hit the floor do squashy
                 // relaunching immediately.
                 state = 'squashing';
                 squashElapsed = 0;
@@ -137,13 +137,10 @@ async function main() {
             const s = squashFactor * Math.sin(Math.PI * t);
             scaleY = 1 - s;
             scaleX = 1 + s;
-            // Keep the ball's bottom edge pinned to the floor: since the
-            // shader scales about the origin and then adds ballY, the
-            // bottom of the mesh sits at ballY - radius*scaleY.
             ballY = floorY + radius * scaleY;
 
             if (squashElapsed >= squashDuration) {
-                // Squash animation concluded: reset and relaunch.
+                // start again
                 state = 'jumping';
                 scaleX = 1;
                 scaleY = 1;
