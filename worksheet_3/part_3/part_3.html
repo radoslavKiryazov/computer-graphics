@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worksheet 3 - Part 3</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background-color: #fcfcfc;
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eaeaea;
+            padding-bottom: 0.5rem;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 1.5rem;
+        }
+
+        p {
+            margin-bottom: 1rem;
+            text-align: justify;
+        }
+
+        .math-block {
+            background-color: #fff;
+            border: 1px solid #eaeaea;
+            border-radius: 5px;
+            padding: 1rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+    </style>
+    <!-- Configure MathJax to use $ for inline math -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$']]
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+
+<body>
+
+    <h1>Reflections</h1>
+
+    <p>
+        To position and orient the cubes, I used translation matrices $ \mathbf{T}(t_x, t_y, t_z) $ to shift
+        vertices,
+        and rotation matrices $ \mathbf{R}_x(\theta) $ and $ \mathbf{R}_y(\theta) $ to revolve them around the X and Y
+        axes.
+    </p>
+
+    <p>
+        The virtual camera is defined using the look-at view matrix $ \mathbf{V} = \text{lookAt}(\mathbf{e}, \mathbf{c},
+        \mathbf{u}) $, which transforms world coordinates relative to the camera's eye position, center target, and up
+        vector. For the actual projection, an orthographic matrix $ \mathbf{P}_{\text{ortho}} $ is used to create
+        parallel lines for the isometric view, while a perspective projection matrix $ \mathbf{P}_{\text{persp}} $
+        creates depth scaling for the one-point perspective, two-point perspective, and three-point perspective views.
+    </p>
+    <p>
+        Finally, because WebGPU utilizes a
+        $ [0, 1] $ depth range rather than the standard $ [-1, 1] $ OpenGL range, a depth adjustment matrix $
+        \mathbf{M}_{\text{st}} $ is consistently applied.
+    </p>
+    <p>
+        The composite Model-View-Projection matrix $ \mathbf{M}_{\text{MVP}} $ transforms each 3D vertex $ \mathbf{p} $
+        using the following equation:
+    </p>
+
+    <div class="math-block">
+        $$ \mathbf{p}_{\text{clip}} = \mathbf{M}_{\text{MVP}} \cdot \mathbf{p} $$
+    </div>
+
+    <h2>Part 1: Isometric View</h2>
+    <p>
+        We relu on an orthographic projection. The
+        model matrix remains the identity matrix $ \mathbf{I} $, and the final concatenation applies the WebGPU depth
+        adjustment, the orthographic projection, the view matrix, and the identity model matrix in sequence:
+    </p>
+    <div class="math-block">
+        $$ \mathbf{M}_{\text{MVP}} = \mathbf{M}_{\text{st}} \cdot \mathbf{P}_{\text{ortho}} \cdot \mathbf{V} \cdot
+        \mathbf{I} $$
+    </div>
+
+    <h2>Part 2: Perspective Views</h2>
+    <p>
+        For the second part, the camera uses a perspective projection $ \mathbf{P}_{\text{persp}} $, and the scene draws
+        three instances of the cube using different model transformations.
+    </p>
+
+    <p>
+        <strong>One-Point Perspective:</strong> Here I simply
+        translated the cube along the X-axis using a translation matrix $ \mathbf{M}_1 = \mathbf{T}(-2.2, 0, 0) $. The
+        concatenated matrix is:
+    </p>
+    <div class="math-block">
+        $$ \mathbf{M}_{\text{MVP}, 0} = \mathbf{M}_{\text{st}} \cdot \mathbf{P}_{\text{persp}} \cdot \mathbf{V} \cdot
+        \mathbf{M}_1 $$
+    </div>
+
+    <p>
+        <strong>Two-Point Perspective:</strong> To achive a two-point perspective I rotated the cube
+        $ 45^\circ $ around the Y-axis. To rotate the cube around its own center $ \mathbf{c} $, it is first translated
+        to the origin, rotated, and translated back, forming $ \mathbf{M}_2 = \mathbf{T}(\mathbf{c}) \cdot
+        \mathbf{R}_y(45^\circ) \cdot \mathbf{T}(-\mathbf{c}) $. and arriving at:
+    </p>
+    <div class="math-block">
+        $$ \mathbf{M}_{\text{MVP}, 1} = \mathbf{M}_{\text{st}} \cdot \mathbf{P}_{\text{persp}} \cdot \mathbf{V} \cdot
+        \mathbf{M}_2 $$
+    </div>
+
+    <p>
+        <strong>Three-Point Perspective:</strong> To achive a three-point perspective, I first
+        translated the cube to the right and rotated it around its center along both the X and Y axes. The
+        resulting model matrix is $ \mathbf{M}_3 = \mathbf{T}(2.2, 0, 0) \cdot \mathbf{T}(\mathbf{c}) \cdot
+        \mathbf{R}_x(35^\circ) \cdot \mathbf{R}_y(45^\circ) \cdot \mathbf{T}(-\mathbf{c}) $, giving us:
+    </p>
+    <div class="math-block">
+        $$ \mathbf{M}_{\text{MVP}, 2} = \mathbf{M}_{\text{st}} \cdot \mathbf{P}_{\text{persp}} \cdot \mathbf{V} \cdot
+        \mathbf{M}_3 $$
+    </div>
+
+</body>
+
+</html>
