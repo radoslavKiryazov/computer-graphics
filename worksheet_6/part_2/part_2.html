@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Worksheet 6 - Part 2</title>
+
+    <script src="../../util/MV.js"></script>
+    <script src="../../util/OBJParser.js"></script>
+    <script src="../../util/genmipmap.js"></script>
+    <script src="script.js"></script>
+    <script id="wgsl" type="x-shader" src="shaders.wgsl"></script>
+
+    <style>
+        table td:first-child {
+            width: 220px;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Controls at top -->
+    <div id="controls">
+        <label>Wrap:
+            <select id="wrapMode">
+                <option value="repeat" selected>repeat</option>
+                <option value="clamp-to-edge">clamp-to-edge</option>
+            </select>
+        </label>
+
+        <label>Mag Filter:
+            <select id="magFilter">
+                <option value="nearest" selected>nearest</option>
+                <option value="linear">linear</option>
+            </select>
+        </label>
+
+        <label>Min Filter:
+            <select id="minFilter">
+                <option value="nearest" selected>nearest</option>
+                <option value="linear">linear</option>
+            </select>
+        </label>
+
+        <label>Mipmap Filter:
+            <select id="mipmapFilter">
+                <option value="nearest" selected>nearest</option>
+                <option value="linear">linear</option>
+            </select>
+        </label>
+
+        <label>
+            <input type="checkbox" id="enableMipmap" checked> Enable Mipmapping
+        </label>
+    </div>
+
+    <br>
+
+    <!-- Canvas and Explanations -->
+    <table>
+        <tr valign="top">
+            <td>
+                <canvas id="webgpu" width="900" height="600"></canvas>
+            </td>
+            <td style="padding-left: 20px; max-width: 450px;">
+                <h3>Filtering & Wrapping Explanations</h3>
+
+                <p><b>Address Mode (Wrapping):</b></p>
+                <ul>
+                    <li><b>repeat:</b> UV values outside [0, 1] wrap around (dropping integer parts), causing the
+                        checkerboard texture to tile continuously across the quad plane.</li>
+                    <li><b>clamp-to-edge:</b> UV values outside [0, 1] clamp to the border texels, stretching the outer
+                        edge pixels across the remainder of the polygon.</li>
+                </ul>
+
+                <p><b>Magnification (magFilter):</b></p>
+                <ul>
+                    <li><b>nearest:</b> Active when texels are larger than screen pixels (up close). Picks the
+                        single closest texel center, producing sharp, blocky, pixelated square boundaries.</li>
+                    <li><b>linear:</b> Performs bilinear interpolation between 4 adjacent texels, producing a smooth,
+                        blurred transition between texels up close.</li>
+                </ul>
+
+                <p><b>Minification (minFilter):</b></p>
+                <ul>
+                    <li><b>nearest:</b> Active when multiple texels fit inside a single screen pixel (in the
+                        distance)[cite: 11]. Samples a single texel per pixel without averaging, causing severe moiré
+                        aliasing and flickering near the horizon.</li>
+                    <li><b>linear:</b> Bilinearly interpolates neighboring texels, slightly reducing high-frequency
+                        noise but insufficient on its own for severe perspective minification.</li>
+                </ul>
+
+                <p><b>Mipmapping (mipmapFilter):</b></p>
+                <ul>
+                    <li><b>Disabled:</b> Uses only Level 0 (64x64). Results in heavy flickering and noise at
+                        distant geometry.</li>
+                    <li><b>nearest:</b> Uses pre-calculated lower-resolution texture levels for distant pixels,
+                        eliminating aliasing. However, switching between mip levels creates visible seams
+                        across the ground plane.</li>
+                    <li><b>linear (Trilinear):</b> Interpolates smoothly between adjacent mipmap levels, removing
+                        visible level transitions across perspective depth.</li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Worksheet 6 - Part 3: Earth Globe</title>
+
+    <script src="../../util/MV.js"></script>
+    <script src="../../util/OBJParser.js"></script>
+    <script src="../../util/genmipmap.js"></script>
+    <script src="script.js"></script>
+    <script id="wgsl" type="x-shader" src="shaders.wgsl"></script>
+
+</head>
+
+<body>
+
+    <table border="0" cellpadding="0" cellspacing="0">
+        <tr valign="top">
+            <td>
+                <canvas id="webgpu" width="600" height="600"></canvas>
+            </td>
+            <td style="padding-left: 20px; max-width: 450px; line-height: 1.5;">
+                <h3>Part 3 Analysis</h3>
+                <p>
+                    To stop the mountain ranges from shimmering and flickering when you
+                    orbit the camera I went with trilinear filtering (<code>linear</code> for min, mag, and
+                    mipmaps), because it keeps spinining super smooth across mip levels without turning the terrain into
+                    a blurry mess.
+                </p>
+            </td>
+        </tr>
+    </table>
+</body>
+
+</html>
