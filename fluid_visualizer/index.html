@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en" class="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Navier-Stokes Fluid Music Visualizer</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="module" src="/src/main.ts"></script>
+    <script type="module" src="/src/script.js"></script>
+    <script type="module" src="/src/util/MV.js"></script>
+    <script id="wgsl" type="x-shader" src="/src/shaders.wgsl"></script>
+</head>
+
+<body class="bg-neutral-950 text-neutral-100 antialiased selection:bg-cyan-500/30 overflow-hidden">
+    <!-- Fullscreen WebGL Canvas -->
+    <canvas id="webgpu" class="fixed inset-0 w-full h-full block"></canvas>
+
+    <!-- Drag & Drop Overlay -->
+    <div id="drop-overlay"
+        class="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-neutral-950/80 backdrop-blur-sm opacity-0 transition-opacity duration-200 border-2 border-dashed border-cyan-400 m-4 rounded-2xl">
+        <p class="text-xl font-medium tracking-wide text-cyan-300">
+            Drop MP3, FLAC, or WAV audio file
+        </p>
+    </div>
+
+    <!-- Bottom-Left: Live Audio Telemetry Panel -->
+    <aside
+        class="fixed bottom-6 left-6 z-20 w-[min(92vw,24rem)] rounded-2xl bg-neutral-900/80 backdrop-blur-md border border-white/10 p-4 shadow-2xl space-y-2.5 text-[11px] font-mono text-neutral-400">
+        <div class="grid grid-cols-4 gap-3">
+            <div>
+                <div class="flex justify-between mb-1"><span>BASS</span><span id="val-bass">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-bass" class="h-full bg-rose-500 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1"><span>KICK</span><span id="val-kick">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-kick" class="h-full bg-amber-400 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1"><span>MID</span><span id="val-mid">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-mid" class="h-full bg-cyan-400 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1"><span>TREBLE</span><span id="val-treble">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-treble" class="h-full bg-violet-400 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 pt-1 border-t border-white/5">
+            <div>
+                <div class="flex justify-between mb-1"><span>RMS</span><span id="val-rms">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-rms" class="h-full bg-emerald-400 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1"><span>CENTROID</span><span id="val-centroid">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-centroid" class="h-full bg-sky-300 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+            <div>
+                <div class="flex justify-between mb-1"><span>FLUX</span><span id="val-flux">0.00</span></div>
+                <div class="h-1 bg-neutral-800 rounded overflow-hidden">
+                    <div id="bar-flux" class="h-full bg-fuchsia-400 w-0 transition-[width] duration-75"></div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Bottom-Right: Music Upload & Playback Controls -->
+    <aside
+        class="fixed bottom-6 right-6 z-20 w-[min(92vw,28rem)] rounded-2xl bg-neutral-900/80 backdrop-blur-md border border-white/10 p-4 shadow-2xl">
+        <div class="flex items-center justify-between gap-3.5">
+            <!-- Upload Trigger -->
+            <label for="audio-upload"
+                class="cursor-pointer shrink-0 rounded-xl bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-400/30 px-3 py-2 text-xs font-semibold tracking-wider uppercase transition">
+                Upload
+                <input id="audio-upload" type="file" accept=".mp3,.flac,.wav,audio/mpeg,audio/flac,audio/wav"
+                    class="hidden" />
+            </label>
+
+            <!-- Track Info & Scrubber -->
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2 mb-1.5">
+                    <p id="track-title" class="truncate text-sm font-medium text-neutral-200">
+                        No track loaded
+                    </p>
+                    <span id="track-time" class="shrink-0 font-mono text-xs text-neutral-400">
+                        0:00 / 0:00
+                    </span>
+                </div>
+
+                <input id="seek-bar" type="range" min="0" max="100" value="0" step="0.1" disabled
+                    class="w-full h-1.5 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-cyan-400 disabled:opacity-40" />
+            </div>
+
+            <!-- Play / Pause Text Button -->
+            <button id="play-pause-btn" type="button" disabled
+                class="shrink-0 w-16 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-30 text-xs font-semibold tracking-wider uppercase text-neutral-100 transition cursor-pointer disabled:cursor-not-allowed">
+                Play
+            </button>
+        </div>
+    </aside>
+
+</body>
+
+</html>
