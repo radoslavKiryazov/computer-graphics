@@ -45,7 +45,7 @@ async function main() {
 
     const vel0 = makeSimTexture();
     const vel1 = makeSimTexture();
-    const velRHS = makeSimTexture();
+    const velScratch = makeSimTexture();
 
     const sampler = device.createSampler({
         magFilter: "linear",
@@ -121,51 +121,52 @@ async function main() {
         ],
     });
 
-    // Advect Velocity Group 1
     const makeAdvectVelBG = (readTex) =>
         device.createBindGroup({
             layout: advectVelPipeline.getBindGroupLayout(1),
             entries: [
                 { binding: 0, resource: readTex.createView() },
                 { binding: 1, resource: sampler },
-                { binding: 2, resource: velRHS.createView() },
+                { binding: 2, resource: vel0.createView() },
             ],
         });
 
-    const advectVelFrom0 = makeAdvectVelBG(vel0);
-    const advectVelFrom1 = makeAdvectVelBG(vel1);
+    const advectVelFromVel1 = makeAdvectVelBG(vel1);
+    const advectVelFromScratch = makeAdvectVelBG(velScratch);
 
     // Jacobi Diffusion Group 1
-    const makeDiffuseBG = (xIn, bIn, xOut) =>
+    // bIn is ALWAYS vel0 (the fixed RHS for the whole solve). xIn/xOut
+    // ping-pong between vel1 and velScratch, never touching vel0.
+    const makeDiffuseBG = (xIn, xOut) =>
         device.createBindGroup({
             layout: diffusePipeline.getBindGroupLayout(1),
             entries: [
                 { binding: 0, resource: xIn.createView() },
-                { binding: 1, resource: bIn.createView() },
+                { binding: 1, resource: vel0.createView() },
                 { binding: 2, resource: xOut.createView() },
             ],
         });
 
-    const diffuseRHSto0 = makeDiffuseBG(velRHS, velRHS, vel0);
-    const diffuse0to1 = makeDiffuseBG(vel0, velRHS, vel1);
-    const diffuse1to0 = makeDiffuseBG(vel1, velRHS, vel0);
+    const diffuseSeed = makeDiffuseBG(vel0, velScratch);        // x0 = b = vel0 -> velScratch
+    const diffuseScratchToVel1 = makeDiffuseBG(velScratch, vel1);
+    const diffuseVel1ToScratch = makeDiffuseBG(vel1, velScratch);
 
     // Advect Dye Group 1
-    const makeAdvectDyeBG = (velTex, dyeRead, dyeWrite) =>
+    // Velocity field to sample is always vel0 now (current velocity lives
+    // there after the advect-velocity step runs).
+    const makeAdvectDyeBG = (dyeRead, dyeWrite) =>
         device.createBindGroup({
             layout: advectDyePipeline.getBindGroupLayout(1),
             entries: [
-                { binding: 0, resource: velTex.createView() },
+                { binding: 0, resource: vel0.createView() },
                 { binding: 1, resource: sampler },
                 { binding: 2, resource: dyeRead.createView() },
                 { binding: 3, resource: dyeWrite.createView() },
             ],
         });
 
-    const advectDyeVel0_0to1 = makeAdvectDyeBG(vel0, dye0, dye1);
-    const advectDyeVel0_1to0 = makeAdvectDyeBG(vel0, dye1, dye0);
-    const advectDyeVel1_0to1 = makeAdvectDyeBG(vel1, dye0, dye1);
-    const advectDyeVel1_1to0 = makeAdvectDyeBG(vel1, dye1, dye0);
+    const advectDye0to1 = makeAdvectDyeBG(dye0, dye1);
+    const advectDye1to0 = makeAdvectDyeBG(dye1, dye0);
 
     // Render Group 1
     const makeRenderBG = (tex) =>
@@ -195,45 +196,42 @@ async function main() {
 
     // ---------- Main loop ----------
     let dyeIs0 = true;
-    let velIs0 = true;
 
     function frame() {
         const encoder = device.createCommandEncoder();
 
-        // 1. Self-advect velocity into velRHS
-        const advectVelPass = encoder.beginComputePass();
-        advectVelPass.setPipeline(advectVelPipeline);
-        advectVelPass.setBindGroup(0, advectVelParamsBG);
-        advectVelPass.setBindGroup(1, velIs0 ? advectVelFrom0 : advectVelFrom1);
-        advectVelPass.dispatchWorkgroups(wgX, wgY);
-        advectVelPass.end();
-
-        // 2. Diffuse velocity via Jacobi iterations (velRHS -> vel0 <-> vel1)
+        // 1. Diffuse velocity via Jacobi iterations.
+        //    b is fixed at vel0 (last frame's final velocity) for every
+        //    iteration; x ping-pongs between vel1 and velScratch.
         const diffusePass = encoder.beginComputePass();
         diffusePass.setPipeline(diffusePipeline);
         diffusePass.setBindGroup(0, diffuseParamsBG);
 
-        diffusePass.setBindGroup(1, diffuseRHSto0);
+        diffusePass.setBindGroup(1, diffuseSeed);
         diffusePass.dispatchWorkgroups(wgX, wgY);
-        velIs0 = true;
+        let latestInScratch = true; // seed call wrote into velScratch
 
         for (let i = 1; i < DIFFUSE_ITERATIONS; i++) {
-            diffusePass.setBindGroup(1, velIs0 ? diffuse0to1 : diffuse1to0);
+            diffusePass.setBindGroup(1, latestInScratch ? diffuseScratchToVel1 : diffuseVel1ToScratch);
             diffusePass.dispatchWorkgroups(wgX, wgY);
-            velIs0 = !velIs0;
+            latestInScratch = !latestInScratch;
         }
         diffusePass.end();
 
-        // 3. Advect dye along diffused velocity field
+        // 2. Self-advect the DIFFUSED velocity: u_new = advect(u_diffused, u_diffused).
+        //    Output always lands in vel0, making it "current" for this frame.
+        const advectVelPass = encoder.beginComputePass();
+        advectVelPass.setPipeline(advectVelPipeline);
+        advectVelPass.setBindGroup(0, advectVelParamsBG);
+        advectVelPass.setBindGroup(1, latestInScratch ? advectVelFromScratch : advectVelFromVel1);
+        advectVelPass.dispatchWorkgroups(wgX, wgY);
+        advectVelPass.end();
+
+        // 3. Advect dye along the final velocity field (always vel0 now).
         const advectDyePass = encoder.beginComputePass();
         advectDyePass.setPipeline(advectDyePipeline);
         advectDyePass.setBindGroup(0, advectDyeParamsBG);
-
-        const dyeBG = velIs0
-            ? dyeIs0 ? advectDyeVel0_0to1 : advectDyeVel0_1to0
-            : dyeIs0 ? advectDyeVel1_0to1 : advectDyeVel1_1to0;
-
-        advectDyePass.setBindGroup(1, dyeBG);
+        advectDyePass.setBindGroup(1, dyeIs0 ? advectDye0to1 : advectDye1to0);
         advectDyePass.dispatchWorkgroups(wgX, wgY);
         advectDyePass.end();
 
